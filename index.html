@@ -23,7 +23,7 @@
 <div class="card"><div class="statlabel">Estimasi budget terisi</div><div class="statvalue" id="statBudget">Rp0</div><div class="statfoot">Dihitung dari input di bawah</div></div>
 </div></section>
 <section class="section" id="map-section"><div class="wrap"><div class="sectionhead"><div><div class="eyebrow">01 / Explore</div><h2>Peta destinasi + transportasi</h2><p>Aktifkan/nonaktifkan jenis titik. Garis antarkota adalah skema urutan perjalanan, bukan geometri rel atau panduan navigasi. Klik pin untuk membuka pencarian rute transit.</p></div></div>
-<div class="grid layout"><div class="card mapcard"><div class="maptop"><strong>Japan route map</strong><div class="maptools"><button class="chipbtn active" data-layer="dest" type="button">Destinasi</button><button class="chipbtn active" data-layer="rail" type="button">Stasiun kereta</button><button class="chipbtn active" data-layer="subway" type="button">Subway</button><button class="chipbtn active" data-layer="bus" type="button">Terminal / halte bus</button><button class="chipbtn active" data-layer="route" type="button">Garis rute</button></div></div><div id="map" aria-label="Peta interaktif destinasi dan transportasi Jepang"></div><div class="legend"><span><i class="dot" style="background:#3166e8"></i>Destinasi</span><span><i class="dot" style="background:#17835e"></i>Stasiun kereta</span><span><i class="dot" style="background:#9a4bc0"></i>Subway</span><span><i class="dot" style="background:#d97720"></i>Terminal / halte bus</span><span><i class="dot" style="background:#28364e"></i>Bandara</span></div></div>
+<div class="grid layout"><div class="card mapcard"><div class="maptop"><strong>Japan route map</strong><div class="maptools"><button class="chipbtn active" data-layer="dest" type="button">Destinasi</button><button class="chipbtn active" data-layer="rail" type="button">Stasiun kereta</button><button class="chipbtn active" data-layer="subway" type="button">Subway</button><button class="chipbtn active" data-layer="bus" type="button">Terminal / halte bus</button><button class="chipbtn active" data-layer="route" type="button">Garis rute skema</button><button class="chipbtn" id="loadTransit" type="button">+ Cari halte/stasiun area ini</button></div></div><div id="map" aria-label="Peta interaktif destinasi dan transportasi Jepang"></div><div id="transitStatus" style="font-size:12px;color:#657187;padding:10px 8px 2px">Titik transit awal adalah referensi. Zoom ke satu kota lalu klik “Cari halte/stasiun area ini” untuk memuat halte bus dan stasiun dari OpenStreetMap.</div><div class="legend"><span><i class="dot" style="background:#3166e8"></i>Destinasi</span><span><i class="dot" style="background:#17835e"></i>Stasiun kereta</span><span><i class="dot" style="background:#9a4bc0"></i>Subway</span><span><i class="dot" style="background:#d97720"></i>Terminal / halte bus</span><span><i class="dot" style="background:#28364e"></i>Bandara</span></div></div>
 <aside class="card sidecard"><h3>Urutan kota yang sedang dipertimbangkan</h3><div class="stoplist">
 <div class="stop"><span class="stopnum">01</span><div><h4>Tokyo</h4><p>Base kota, Tokyo DisneySea, opsi day trip Kamakura</p><a class="smalllink" href="https://www.google.com/maps/dir/?api=1&origin=Tokyo+Station&destination=Tokyo+DisneySea&travelmode=transit" target="_blank" rel="noopener">Rute transit ke DisneySea ↗</a></div></div>
 <div class="stop"><span class="stopnum">02</span><div><h4>Kawaguchiko / Mt. Fuji</h4><p>1 malam sebagai rancangan; akses bus/kereta perlu dibandingkan</p><a class="smalllink" href="https://www.google.com/maps/dir/?api=1&origin=Shinjuku+Expressway+Bus+Terminal&destination=Kawaguchiko+Station&travelmode=transit" target="_blank" rel="noopener">Rute transit ke Kawaguchiko ↗</a></div></div>
@@ -148,6 +148,37 @@ L.polyline(localTokyo,{color:'#17835e',weight:3,opacity:.65,dashArray:'3 7'}).bi
 const localOsaka=[[34.7025,135.4959],[34.6822,135.4657],[34.6675,135.4396],[34.6654,135.4323]];
 L.polyline(localOsaka,{color:'#9a4bc0',weight:3,opacity:.75,dashArray:'3 7'}).bindPopup('Skema koneksi Osaka ke USJ; cek rute transit aktual.').addTo(groups.route);
 document.querySelectorAll('[data-layer]').forEach(btn=>btn.addEventListener('click',()=>{const key=btn.dataset.layer;if(map.hasLayer(groups[key])){map.removeLayer(groups[key]);btn.classList.remove('active')}else{groups[key].addTo(map);btn.classList.add('active')}}));
+let transitSearchKey='';
+document.getElementById('loadTransit').addEventListener('click',async()=>{
+ const status=document.getElementById('transitStatus');
+ const b=map.getBounds(),sw=b.getSouthWest(),ne=b.getNorthEast();
+ if(map.getZoom()<11 || (ne.lat-sw.lat)>0.65 || (ne.lng-sw.lng)>0.85){status.textContent='Zoom lebih dekat ke satu area (misalnya Tokyo, Osaka, Kyoto, Kawaguchiko, atau Shimizu), lalu coba lagi.';return;}
+ const key=[sw.lat.toFixed(3),sw.lng.toFixed(3),ne.lat.toFixed(3),ne.lng.toFixed(3)].join(',');
+ if(key===transitSearchKey){status.textContent='Area ini sudah dicari. Geser peta atau zoom ke area lain untuk memuat titik transit baru.';return;}
+ transitSearchKey=key;status.textContent='Sedang mencari stasiun kereta, subway, platform, dan halte bus dari OpenStreetMap…';
+ try{
+  const q='[out:json][timeout:20];(node["railway"~"station|halt|subway_entrance"]('+sw.lat+','+sw.lng+','+ne.lat+','+ne.lng+');way["railway"~"station|halt"]('+sw.lat+','+sw.lng+','+ne.lat+','+ne.lng+');node["highway"="bus_stop"]('+sw.lat+','+sw.lng+','+ne.lat+','+ne.lng+');node["public_transport"~"platform|station"]('+sw.lat+','+sw.lng+','+ne.lat+','+ne.lng+'););out center tags 80;';
+  const res=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:'data='+encodeURIComponent(q)});
+  if(!res.ok)throw new Error('Overpass API '+res.status);
+  const data=await res.json(),els=(data.elements||[]).slice(0,80);
+  ['rail','subway','bus'].forEach(k=>{if(groups[k])groups[k].clearLayers()});
+  let count=0;
+  els.forEach(el=>{
+   const tags=el.tags||{},lat=el.lat??(el.center&&el.center.lat),lng=el.lon??(el.center&&el.center.lon);
+   if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
+   let type='rail',label='R',kind='rail';
+   if(tags.railway==='subway_entrance'||tags.subway==='yes'||tags.station==='subway'){type='subway';label='M';kind='subway'}
+   else if(tags.highway==='bus_stop'||tags.bus==='yes'&&tags.public_transport==='platform'){type='bus';label='B';kind='bus'}
+   else if(tags.public_transport==='platform'&&tags.railway!=='platform'){type=tags.bus==='yes'?'bus':'rail';label=type==='bus'?'B':'R';kind=type}
+   const name=tags.name||tags.name_ja||({'rail':'Stasiun kereta (tanpa nama)','subway':'Akses subway (tanpa nama)','bus':'Halte bus (tanpa nama)'}[type]);
+   const marker=L.marker([lat,lng],{icon:pin(kind,label)}).bindPopup('<b>'+name+'</b><p>'+({'rail':'Stasiun / halte kereta','subway':'Subway / pintu masuk subway','bus':'Halte bus / platform bus'}[type])+'</p><a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(lat+','+lng)+'&travelmode=transit">Cari rute transit ↗</a>');
+   marker.addTo(groups[type]);count++;
+  });
+  document.querySelectorAll('[data-layer]').forEach(btn=>{const key=btn.dataset.layer;if(['rail','subway','bus'].includes(key)&&!map.hasLayer(groups[key])){groups[key].addTo(map);btn.classList.add('active')}});
+  status.textContent=count+' titik transit dimuat untuk area ini. Data OpenStreetMap bisa tidak lengkap; klik pin untuk membuka pencarian rute transit.';
+  if(!count)transitSearchKey='';
+ }catch(e){status.textContent='Pencarian transit gagal ('+e.message+'). Coba lagi nanti atau pakai link rute Google Maps di bagian Rute.';transitSearchKey='';}
+});
 })();
 </script>
 </body></html>
