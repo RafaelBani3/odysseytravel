@@ -10,8 +10,9 @@ export default function MapPanel({ cities }) {
     if (!hostRef.current || mapRef.current) return;
     const map = L.map(hostRef.current, { scrollWheelZoom: false, zoomControl: true }).setView([-2, 118], 4);
     mapRef.current = map;
-    const tiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      subdomains: "abcd", maxZoom: 19, attribution: '&copy; OpenStreetMap contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noreferrer">CARTO</a>'
+    const tiles = L.tileLayer("https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png", {
+      subdomains: ["a", "b", "c"], maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors · Tiles courtesy of <a href="https://www.openstreetmap.fr/" target="_blank" rel="noreferrer">OpenStreetMap France</a>'
     });
     let errors = 0;
     tiles.on("load", () => setTileStatus("Peta siap"));
@@ -29,9 +30,11 @@ export default function MapPanel({ cities }) {
     const bounds = [];
     locations.forEach((city, index) => {
       const point = [city.lat, city.lng]; bounds.push(point);
-      L.circleMarker(point, { radius: 9, color: "#fff", weight: 3, fillColor: index === 0 ? "#2a64ed" : "#16a081", fillOpacity: 1 })
-        .bindPopup('<strong>' + escapeHtml(city.name) + '</strong><br/><span>' + escapeHtml(city.region || "") + '</span><br/><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(city.name) + '">Buka Google Maps ↗</a>').addTo(markersRef.current);
-      L.marker(point, { icon: L.divIcon({ className: "map-city-label", html: '<span>' + escapeHtml(city.name) + '</span>', iconSize: [140, 24], iconAnchor: [-5, 28] }) }).addTo(markersRef.current);
+      L.marker(point, { icon: L.divIcon({
+        className: "map-city-number",
+        html: '<span>' + (index + 1) + '</span>',
+        iconSize: [29, 29], iconAnchor: [14, 14]
+      }) }).bindPopup('<strong>' + escapeHtml(city.name) + '</strong><br/><span>' + escapeHtml(city.region || "") + '</span><br/><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(city.name) + '">Buka Google Maps ↗</a>').addTo(markersRef.current);
     });
     if (bounds.length > 1) {
       L.polyline(bounds, { color: "#3166e8", weight: 3, opacity: .78, dashArray: "7 8" }).addTo(routeRef.current);
@@ -44,6 +47,7 @@ export default function MapPanel({ cities }) {
       <span className={"map-status " + (tileStatus.startsWith("Basemap") ? "warning" : "")}>{tileStatus.startsWith("Basemap") ? <TriangleAlert size={14}/> : <Layers size={14}/>} {tileStatus}</span></div>
     <div ref={hostRef} className="leaflet-map" aria-label="Peta kota tujuan"/>
     <div className="map-footer"><span><MapPin size={14}/> {cities.length} kota dipilih</span><a href={"https://www.google.com/maps/dir/" + cities.map((c) => encodeURIComponent(c.name)).join("/")} target="_blank" rel="noreferrer">Cek urutan di Google Maps <ExternalLink size={13}/></a></div>
+    <div className="map-route-order" aria-label="Urutan kota pada peta">{cities.map((city, index) => <span className="map-route-chip" key={city.name}><b>{index + 1}</b>{city.name}</span>)}</div>
   </section>;
 }
 function escapeHtml(value) {
