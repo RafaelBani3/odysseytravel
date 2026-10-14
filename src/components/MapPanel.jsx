@@ -3,7 +3,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { ExternalLink, Layers, MapPin, TriangleAlert } from "lucide-react";
 
-export default function MapPanel({ cities, country = "" }) {
+export default function MapPanel({ cities }) {
   const hostRef = useRef(null), mapRef = useRef(null), markersRef = useRef(null), routeRef = useRef(null);
   const [tileStatus, setTileStatus] = useState("Memuat peta…");
   useEffect(() => {
@@ -22,36 +22,11 @@ export default function MapPanel({ cities, country = "" }) {
     routeRef.current = L.layerGroup().addTo(map);
     return () => { map.remove(); mapRef.current = null; markersRef.current = null; routeRef.current = null; };
   }, []);
-  const [geocoded, setGeocoded] = useState({});
-  useEffect(() => {
-    let cancelled = false;
-    const missing = cities.filter((city) => !(Number.isFinite(city.lat) && Number.isFinite(city.lng)) && !geocoded[city.name]);
-    if (missing.length) {
-      (async () => {
-        for (const city of missing) {
-          if (cancelled) return;
-          try {
-            const query = [city.name, country].filter(Boolean).join(", ");
-            const response = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(query), { headers: { Accept: "application/json" } });
-            if (!response.ok) continue;
-            const results = await response.json();
-            if (!cancelled && results[0]) setGeocoded((prev) => ({ ...prev, [city.name]: { lat: Number(results[0].lat), lng: Number(results[0].lon) } }));
-          } catch (_) { /* Coordinates can be supplied manually if geocoding is unavailable. */ }
-          await new Promise((resolve) => window.setTimeout(resolve, 1100));
-        }
-      })();
-    }
-    return () => { cancelled = true; };
-  }, [cities, geocoded, country]);
-
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !markersRef.current || !routeRef.current) return;
     markersRef.current.clearLayers(); routeRef.current.clearLayers();
-    const locations = cities.map((city) => {
-      const found = Number.isFinite(city.lat) && Number.isFinite(city.lng) ? city : { ...city, ...(geocoded[city.name] || {}) };
-      return found;
-    }).filter((city) => Number.isFinite(city.lat) && Number.isFinite(city.lng));
+    const locations = cities.filter((city) => Number.isFinite(city.lat) && Number.isFinite(city.lng));
     const bounds = [];
     locations.forEach((city, index) => {
       const point = [city.lat, city.lng]; bounds.push(point);
@@ -66,7 +41,7 @@ export default function MapPanel({ cities, country = "" }) {
       map.fitBounds(L.latLngBounds(bounds).pad(.2), { maxZoom: 7 });
     } else if (bounds.length === 1) map.setView(bounds[0], 10);
     window.setTimeout(() => map.invalidateSize(), 80);
-  }, [cities, geocoded, country]);
+  }, [cities]);
   return <section className="surface map-card">
     <div className="section-heading map-heading"><div><span className="eyebrow">Peta perjalanan</span><h2>Kota tujuan & rute antarkota</h2><p>Garis putus-putus menunjukkan urutan kota secara skematis, bukan jalur rel aktual.</p></div>
       <span className={"map-status " + (tileStatus.startsWith("Basemap") ? "warning" : "")}>{tileStatus.startsWith("Basemap") ? <TriangleAlert size={14}/> : <Layers size={14}/>} {tileStatus}</span></div>
