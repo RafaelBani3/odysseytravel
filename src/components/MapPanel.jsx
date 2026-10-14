@@ -3,7 +3,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { ExternalLink, Layers, MapPin, TriangleAlert } from "lucide-react";
 
-export default function MapPanel({ cities }) {
+export default function MapPanel({ cities, country = "" }) {
   const hostRef = useRef(null), mapRef = useRef(null), markersRef = useRef(null), routeRef = useRef(null);
   const [tileStatus, setTileStatus] = useState("Memuat peta…");
   useEffect(() => {
@@ -31,7 +31,7 @@ export default function MapPanel({ cities }) {
         for (const city of missing) {
           if (cancelled) return;
           try {
-            const query = [city.name, city.region, "Japan"].filter(Boolean).join(", ");
+            const query = [city.name, country].filter(Boolean).join(", ");
             const response = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(query), { headers: { Accept: "application/json" } });
             if (!response.ok) continue;
             const results = await response.json();
@@ -42,7 +42,7 @@ export default function MapPanel({ cities }) {
       })();
     }
     return () => { cancelled = true; };
-  }, [cities, geocoded]);
+  }, [cities, geocoded, country]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -66,7 +66,7 @@ export default function MapPanel({ cities }) {
       map.fitBounds(L.latLngBounds(bounds).pad(.2), { maxZoom: 7 });
     } else if (bounds.length === 1) map.setView(bounds[0], 10);
     window.setTimeout(() => map.invalidateSize(), 80);
-  }, [cities, geocoded]);
+  }, [cities, geocoded, country]);
   return <section className="surface map-card">
     <div className="section-heading map-heading"><div><span className="eyebrow">Peta perjalanan</span><h2>Kota tujuan & rute antarkota</h2><p>Garis putus-putus menunjukkan urutan kota secara skematis, bukan jalur rel aktual.</p></div>
       <span className={"map-status " + (tileStatus.startsWith("Basemap") ? "warning" : "")}>{tileStatus.startsWith("Basemap") ? <TriangleAlert size={14}/> : <Layers size={14}/>} {tileStatus}</span></div>
